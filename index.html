@@ -2,9 +2,8 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Enviar no WhatsApp</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.6.2/sql-wasm.js"></script>
+<title>Enviar no WhatsApp</title>
 <style>
     :root {
         --verde-whatsapp: #25D366;
@@ -33,7 +32,7 @@
         padding: 20px;
         border-radius: 12px;
         box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-        width: 370px;
+        width: 380px;
         transition: background 0.3s;
     }
     body.dark .container {
@@ -51,6 +50,7 @@
         border: 1px solid #ccc;
         font-size: 14px;
         outline: none;
+        transition: border 0.3s;
     }
     input:focus, textarea:focus {
         border-color: var(--verde-whatsapp);
@@ -73,22 +73,11 @@
     .btn-enviar:hover {
         background: var(--verde-escuro);
     }
-    .btn-editar {
-        background: orange;
-        color: white;
-    }
-    .btn-excluir {
-        background: red;
-        color: white;
-    }
-    .btn-nota {
-        background: #555;
-        color: white;
-    }
-    .btn-nome {
-        background: blue;
-        color: white;
-    }
+    .btn-editar { background: orange; color: white; }
+    .btn-excluir { background: red; color: white; }
+    .btn-nota { background: #555; color: white; }
+    .btn-nome { background: #007BFF; color: white; }
+    .btn-reenviar { background: #4CAF50; color: white; }
     .tema-toggle {
         background: none;
         border: none;
@@ -101,6 +90,11 @@
     .historico {
         margin-top: 20px;
     }
+    .contador {
+        font-size: 14px;
+        margin-bottom: 8px;
+        font-weight: bold;
+    }
     .msg-item {
         background: var(--verde-whatsapp);
         color: white;
@@ -108,6 +102,7 @@
         border-radius: 10px;
         margin-bottom: 10px;
         font-size: 14px;
+        word-wrap: break-word;
     }
     body.dark .msg-item {
         background: var(--verde-escuro);
@@ -119,47 +114,27 @@
         opacity: 0.8;
     }
     .nome {
+        font-size: 14px;
         font-weight: bold;
+        margin-bottom: 5px;
     }
 </style>
 </head>
 <body>
-<div class="container">
-    <button class="tema-toggle" onclick="alternarTema()">🌙 Mudar Tema</button>
-    <h2>Enviar no WhatsApp</h2>
-    <input type="tel" id="numero" placeholder="Ex: 11987654321" maxlength="13">
-    <textarea id="mensagem" placeholder="Digite sua mensagem"></textarea>
-    <button class="btn-enviar" onclick="enviarMensagem()">📩 Enviar</button>
-    <div class="historico" id="historico"></div>
-</div>
+    <div class="container">
+        <button class="tema-toggle" onclick="alternarTema()">🌙 Mudar Tema</button>
+        <h2>Enviar no WhatsApp</h2>
+        <input type="tel" id="numero" placeholder="Ex: 11987654321" maxlength="13">
+        <textarea id="mensagem" placeholder="Digite sua mensagem"></textarea>
+        <button class="btn-enviar" onclick="enviarMensagem()">📩 Enviar</button>
+
+        <div class="historico">
+            <div class="contador" id="contadorContatos">Contatos no histórico: 0</div>
+            <div id="historico"></div>
+        </div>
+    </div>
 
 <script>
-let db;
-
-async function initDB() {
-    const SQL = await initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.6.2/${file}` });
-    let savedDb = localStorage.getItem("whatsappDB");
-    if (savedDb) {
-        db = new SQL.Database(Uint8Array.from(atob(savedDb), c => c.charCodeAt(0)));
-    } else {
-        db = new SQL.Database();
-        db.run(`CREATE TABLE historico (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            numero TEXT, 
-            mensagem TEXT, 
-            nome TEXT, 
-            nota TEXT, 
-            data TEXT
-        )`);
-    }
-    mostrarHistorico();
-}
-
-function salvarDB() {
-    const data = btoa(String.fromCharCode(...db.export()));
-    localStorage.setItem("whatsappDB", data);
-}
-
 function enviarMensagem() {
     let numero = document.getElementById("numero").value.replace(/\D/g, '');
     let mensagem = document.getElementById("mensagem").value.trim();
@@ -173,58 +148,70 @@ function enviarMensagem() {
     let url = `https://wa.me/${numeroCompleto}?text=${encodeURIComponent(mensagem)}`;
     window.open(url, '_blank');
 
-    db.run(`INSERT INTO historico (numero, mensagem, nome, nota, data) VALUES (?, ?, '', '', ?)`, 
-        [numeroCompleto, mensagem, new Date().toLocaleString()]);
-    salvarDB();
+    salvarHistorico(numeroCompleto, mensagem, "", "");
     mostrarHistorico();
-
     document.getElementById("numero").value = "";
     document.getElementById("mensagem").value = "";
 }
 
+function salvarHistorico(numero, mensagem, nota, nome) {
+    let historico = JSON.parse(localStorage.getItem("historico") || "[]");
+    historico.unshift({ numero, mensagem, nota, nome, data: new Date().toLocaleString() });
+    localStorage.setItem("historico", JSON.stringify(historico));
+}
+
 function mostrarHistorico() {
+    let historico = JSON.parse(localStorage.getItem("historico") || "[]");
+    document.getElementById("contadorContatos").innerText = `Contatos no histórico: ${historico.length}`;
     let lista = document.getElementById("historico");
     lista.innerHTML = "";
-    const stmt = db.prepare("SELECT * FROM historico ORDER BY id DESC");
-    while (stmt.step()) {
-        let item = stmt.getAsObject();
+    historico.forEach((item, index) => {
         lista.innerHTML += `
             <div class="msg-item">
                 ${item.nome ? `<div class="nome">👤 ${item.nome}</div>` : ""}
                 <b>${item.numero}</b><br>${item.mensagem}
                 ${item.nota ? `<div class="nota">📝 ${item.nota}</div>` : ""}
                 <br><small>${item.data}</small><br>
-                <button class="btn-nome" onclick="editarNome(${item.id})">👤 Nome</button>
-                <button class="btn-nota" onclick="editarNota(${item.id})">📝 Nota</button>
-                <button class="btn-excluir" onclick="excluirRegistro(${item.id})">🗑 Excluir</button>
+                <button class="btn-nome" onclick="adicionarNome(${index})">👤 Nome</button>
+                <button class="btn-nota" onclick="adicionarNota(${index})">📝 Nota</button>
+                <button class="btn-reenviar" onclick="reenviarMensagem(${index})">🔄 Reenviar</button>
+                <button class="btn-excluir" onclick="excluirRegistro(${index})">🗑 Excluir</button>
             </div>
         `;
-    }
-    stmt.free();
+    });
 }
 
-function editarNome(id) {
-    let novoNome = prompt("Digite o nome:");
+function adicionarNome(index) {
+    let historico = JSON.parse(localStorage.getItem("historico") || "[]");
+    let novoNome = prompt("Adicionar/Editar nome:", historico[index].nome || "");
     if (novoNome !== null) {
-        db.run(`UPDATE historico SET nome = ? WHERE id = ?`, [novoNome.trim(), id]);
-        salvarDB();
+        historico[index].nome = novoNome.trim();
+        localStorage.setItem("historico", JSON.stringify(historico));
         mostrarHistorico();
     }
 }
 
-function editarNota(id) {
-    let novaNota = prompt("Digite a nota:");
+function adicionarNota(index) {
+    let historico = JSON.parse(localStorage.getItem("historico") || "[]");
+    let novaNota = prompt("Adicionar/Editar nota:", historico[index].nota || "");
     if (novaNota !== null) {
-        db.run(`UPDATE historico SET nota = ? WHERE id = ?`, [novaNota.trim(), id]);
-        salvarDB();
+        historico[index].nota = novaNota.trim();
+        localStorage.setItem("historico", JSON.stringify(historico));
         mostrarHistorico();
     }
 }
 
-function excluirRegistro(id) {
+function reenviarMensagem(index) {
+    let historico = JSON.parse(localStorage.getItem("historico") || "[]");
+    let url = `https://wa.me/${historico[index].numero}?text=${encodeURIComponent(historico[index].mensagem)}`;
+    window.open(url, '_blank');
+}
+
+function excluirRegistro(index) {
     if (confirm("Tem certeza que deseja excluir este registro?")) {
-        db.run(`DELETE FROM historico WHERE id = ?`, [id]);
-        salvarDB();
+        let historico = JSON.parse(localStorage.getItem("historico") || "[]");
+        historico.splice(index, 1);
+        localStorage.setItem("historico", JSON.stringify(historico));
         mostrarHistorico();
     }
 }
@@ -233,7 +220,7 @@ function alternarTema() {
     document.body.classList.toggle("dark");
 }
 
-initDB();
+mostrarHistorico();
 </script>
 </body>
 </html>
